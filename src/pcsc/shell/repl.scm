@@ -80,7 +80,7 @@
   (define-command (exit)
     "exit\n\nquit REPL"
     ;; we don't know if it's release before exit, so just in case.
-    (release-context)
+    ((lookup-command 'release-context))
     (quit? #t))
 
   (define-command (load-script file :optional (verbose #f))
