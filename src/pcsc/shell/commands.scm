@@ -34,13 +34,21 @@
 	    ;; utilities
 	    aid->bytevector
 	    retrieve-return-code
+	    (rename (gp:*security-level-none* *security-level-none*)
+		    (gp:*security-level-mac*  *security-level-mac*)
+		    (gp:*security-level-enc*  *security-level-enc*)
+		    (gp:*security-level-renc* *security-level-renc*))
+	    ;; variables
+	    issuer applications loadfiles modules
 	    )
     (import (rnrs)
-	    (prefix (pcsc control) pcsc:)
+	    (prefix (pcsc operations control) pcsc:)
+	    (prefix (pcsc operations gp) gp:)
 	    (sagittarius)
 	    (sagittarius object)
 	    (sagittarius control)
 	    (tlv)
+	    (srfi :13)
 	    (srfi :39))
 
   (define *command-table* (make-eq-hashtable))
@@ -96,6 +104,8 @@
      Establish card context. \n\
      If there is already a context, this it will release it before\n\
      establish one."
+    ;; just in case
+    (card-disconnect pcsc:*scard-reset-card*)
     (release-context)
     (*current-context* (pcsc:card-establish-context scope)))
 
@@ -121,7 +131,7 @@
      Connect to a card and returns actual protocol. \n\
      if there is already a connection, the it will be disconnected."
     (check-context card-connect)
-    (card-disconnect)
+    (card-disconnect pcsc:*scard-reset-card*)
     (receive (con ap) (pcsc:card-connect (*current-context*)
 					 reader share protocol)
       (*current-connection* con)
@@ -155,6 +165,8 @@
 			     "invalid response APDU" response-apdu))
       (bytevector-copy response-apdu (- len 2))))
 
+  (define *current-sc* (make-parameter #f))
+
   (define-command (send-apdu apdu)
     "send-apdu apdu\n\n\
      Sends given APDU to current connection and returns response."
@@ -172,19 +184,14 @@
 	  (let1 u8 (substring s (* i 2) (+ (* i 2) 2))
 	    (bytevector-u8-set! bv i (string->number u8 16))))))
     (check-card send-apdu)
-    (let* ((pci (if (= (*current-protocol*) pcsc:*scard-protocol-t1*)
-		    pcsc:*scard-pci-t1*
-		    pcsc:*scard-pci-t0*))
-	   (buf (make-bytevector 256)))
-      (receive (rl _) (pcsc:card-transmit! (*current-connection*)
-					   pci 
-					   (if (bytevector? apdu)
-					       apdu
-					       (parse-apdu apdu)) 
-					   buf)
-	(if (= rl (bytevector-length buf))
-	    buf
-	    (bytevector-copy buf 0 rl)))))
+    (let ((pci (if (= (*current-protocol*) pcsc:*scard-protocol-t1*)
+		   pcsc:*scard-pci-t1*
+		   pcsc:*scard-pci-t0*))
+	  (apdu (if (bytevector? apdu) apdu (parse-apdu apdu))))
+      (receive (resp _) 
+	  (pcsc:card-transmit (*current-connection*)
+			      pci (gp:encode-apdu (*current-sc*) apdu))
+	resp)))
 
   (define (aid->bytevector aid)
     (cond ((symbol? aid)
@@ -192,7 +199,7 @@
 	  ((number? aid)
 	   ;; assume it doesn't start with #x00
 	   ;; and most likely hex without alphabet
-	   (integer->bytevector (string->number (format "~a" aid) 16)))
+	   (integer->bytevector aid))
 	  ((bytevector? aid) aid)
 	  (else
 	   (assertion-violation 'aid->bytevector
@@ -213,19 +220,16 @@
 	      (put-bytevector out bv))
 	    (put-u8 out 0))))))
 
+  (define-constant issuer       #x80)
+  (define-constant applications #x40)
+  (define-constant loadfiles    #x20)
+  (define-constant modules      #x10)
+
   (define-command (get-status type :key (aid #f) (contactless #f))
     "get-status types :key aid\n\n\
      Transmit GET STATUS command.\n  \
      * type: status type must be issuer, applications, loadfiles or modules"
-    (let ((p1 (case type
-		((issuer)       #x80)
-		((applications) #x40)
-		((loadfiles)    #x20)
-		((modules)      #x10)
-		(else (assertion-violation 
-		       'get-status
-		       "type must issuer, applications, loadfile or modules"
-		       type))))
+    (let ((p1 type)
 	  (p2 (if contactless #x00 #x02)))
       (define (construct-apdu p2)
 	(call-with-bytevector-output-port
@@ -257,5 +261,98 @@
     "trace-off\n\n\
      Disable trace log."
     (pcsc:*trace-on* #f))
+
+  ;; open secure channel
+  (define *enc-key* (make-parameter #f))
+  (define *mac-key* (make-parameter #f))
+  (define *dek-key* (make-parameter #f))
+
+  (define-command (set-keys! :key (enc #f) (mac #f) (dek #f))
+    "set-keys! :key enc mac dek\n\n\
+     Sets default keys. If #f is given it won't do anything. non bytevector value sets #f as default key (reset)"
+    (define (set-key! p v)
+      (when v
+	(if (bytevector? v)
+	    (p v)
+	    (p #f))))
+    (set-key! *enc-key* enc)
+    (set-key! *mac-key* mac)
+    (set-key! *dek-key* dek))
+
+  (define-condition-type &chennel pcsc:&pcsc-error
+    make-channel-error chennel-error?)
+  (define (raise-channel-error who msg retcode . irr)
+    (raise (apply condition
+		  (filter values
+			  (list (make-channel-error retcode)
+				(and who (make-who-condition who))
+				(make-message-condition msg)
+				(make-irritants-condition irr))))))
+
+  (define-command (channel :key (security gp:*security-level-none*)
+			   (key-id 0) (key-version 0)
+			   (option #f)
+			   ;; keys
+			   (enc-key (*enc-key*))
+			   (mac-key (*mac-key*))
+			   (dek-key (*dek-key*))
+			   (derive-key gp:derive-key-none))
+    "channel :key security key-id key-version enc-key mac-key dek-key\n\n\
+     Opens secure channel with given parameters. Keyword arguments specify\
+     Following parameters:\n  \
+     * security: specify security level must be *security-level-none*,\n  \
+       *security-level-mac*, *security-level-enc* or *security-level-renc*.\n  \
+     * options:  implementation option. must be fixnum.\n  \
+     * key-id:   key identifier.\n  \
+     * key-version: key version.\n  \
+     * enc-key, mac-key, dec-key: keys to authenticate. if these are not \n    \
+       specified *enc-key*, *mac-key* or *dek-key* parameters will be used."
+    (define (ensure-bytevector v)
+      (cond ((bytevector? v) v)
+	    ((number? v) (integer->bytevector v))
+	    ((symbol? v) (ensure-bytevector (->string v)))
+	    ((string? v) (ensure-bytevector (->number v 16)))
+	    (else (error 'channel "key can not be converted to bytevector" v))))
+    ;; closes current channel if there is.
+    (close-channel)
+    (let ((protocol (make-bytevector 255)))
+      (unless option
+	;; tag 66
+	(let1 data (pcsc:bytevector->apdu-string 
+		    (send-apdu #vu8(#x80 #xCA #x00 #x66 #x00)))
+	  (do ((offset 0 (+ index 18))
+	       (index (string-contains-ci data "2A864886FC6B04" 0)
+		      (string-contains-ci data "2A864886FC6B04" index)))
+	      ((not index))
+	    (let ((scp (->integer (substring data (+ index 14) (index 16)) 16))
+		  (v   (->integer (substring data (+ index 16) (index 18)) 16)))
+	      (bytevector-u8-set! protocol scp i)))))
+      (let* ((context (gp:make-secure-channel-context key-version key-id
+						      :option option))
+	     (rsp (send-apdu (gp:initialize-update context))))
+	(when (and (not option) (> (bytevector-length rsp) 12))
+	  (let* ((scp (bitwise-and (bytevector-u8-ref rsp 11) #xFF))
+		 (v   (bytevector-u8-ref protocol scp)))
+	    (when (positive? v) (sc-context-option-set! context v))))
+	(unless (gp:authenticate-card context rsp 
+				      (ensure-bytevector enc-key) 
+				      (ensure-bytevector mac-key) 
+				      (ensure-bytevector dek-key) 
+				      derive-key)
+	  (raise-channel-error 
+	   'channel
+	   "card could not be authenicated with the supplied keys!"
+	   "Authentication failed"))
+	(let1 result (send-apdu (gp:external-authenticate context security))
+	  ;; set current security context
+	  (*current-sc* context)
+	  result))))
+
+  (define-command (close-channel)
+    "close-channel\n\nCloses current secure channel"
+    (when (*current-sc*)
+      (let1 resp (send-apdu #vu8(#x00 #x70 #x80 #x00))
+	(*current-sc* #f)
+	resp)))
 
 )

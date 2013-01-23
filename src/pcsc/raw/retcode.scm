@@ -90,7 +90,7 @@
     (hashtable-set! *error-code-table* code message))
   (define (error-code->string code)
     (cond ((hashtable-ref *error-code-table* code #f))
-	  (else (format "Unknown error 0x%X" code))))
+	  (else (format "Unknown error 0x~X" code))))
 
   (define-syntax define-error-code
     (lambda (x)

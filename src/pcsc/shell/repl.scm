@@ -39,30 +39,26 @@
 	    (util file)
 	    (sagittarius)
 	    (sagittarius control)
-	    (pcsc control)
+	    (pcsc operations)
 	    (pcsc shell commands)
 	    (srfi :39))
 
   (define (pcsc-eval expr)
     (define (convert v)
       (if (bytevector? v)
-	  (bytevector->apdu-string v)
+	  (bytevector->hex-string v)
 	  v))
     (let* ((name (if (pair? expr) (car expr) expr))
 	   (handler (lookup-command name)))
       (cond (handler
 	     (if (pair? expr)
-		 (receive r (apply handler (cdr expr))
+		 ;; get evaluated arguments
+		 (receive r (apply handler (map pcsc-eval (cdr expr)))
 		   ;; bytevectors are most likely APDU from command
 		   (let1 converted (map convert r)
 		     (apply values converted)))
 		 (pcsc-eval `(help ,name))))
-	    (else
-	     ((pcsc-repl-printer)
-	      (format 
-	       "*warning* command ~a was not found, run as a scheme expression" 
-	       name))
-	     (eval expr (current-library))))))
+	    (else (eval expr (current-library))))))
 
   (define *verbose* (make-parameter #f))
 

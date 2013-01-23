@@ -31,4 +31,4 @@
 ;; import is
 (library (pcsc)
     (export :all)
-    (import (pcsc control)))
+    (import (pcsc operations)))
