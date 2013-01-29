@@ -142,6 +142,7 @@
     "card-disconnect\n\n\
      Disconnect current connection."
     (when (*current-connection*) 
+      (close-channel)
       (pcsc:card-disconnect! (*current-connection*) how)
       (*current-connection* #f)
       (*current-protocol* #f)))

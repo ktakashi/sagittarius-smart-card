@@ -198,7 +198,10 @@
 
   (define (card-transmit card protocol send-data
 			 :optional (need-pci #f))
-    (let1 buffer (make-bytevector 256)
+    ;; I don't know why it sometimes requires more than 256 bytes
+    ;; but in some case we needed more. might be data 256 bytes + return
+    ;; code 2 bytes?
+    (let1 buffer (make-bytevector (+ 256 2))
       (receive (rl pci) (card-transmit! card protocol send-data buffer need-pci)
 	(if (= rl (bytevector-length buffer))
 	    (values buffer pci)

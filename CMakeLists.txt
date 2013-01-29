@@ -10,6 +10,7 @@ EXECUTE_PROCESS(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 ADD_SUBDIRECTORY(src work/src)
+ADD_SUBDIRECTORY(contrib work/contrib)
 
 # uninstall target
 CONFIGURE_FILE(
