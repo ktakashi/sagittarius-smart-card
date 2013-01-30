@@ -307,7 +307,7 @@
     "channel :key security key-id key-version enc-key mac-key dek-key\n\n\
      Opens secure channel with given parameters. Keyword arguments specify\
      Following parameters:\n  \
-     * security: specify security level must be *security-level-none*,\n  \
+     * security: specify security level must be *security-level-none*,\n    \
        *security-level-mac*, *security-level-enc* or *security-level-renc*.\n  \
      * options:  implementation option. must be fixnum.\n  \
      * key-id:   key identifier.\n  \

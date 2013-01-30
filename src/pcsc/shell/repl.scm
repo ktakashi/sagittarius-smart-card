@@ -57,7 +57,7 @@
 		   ;; bytevectors are most likely APDU from command
 		   (let1 converted (map convert r)
 		     (apply values converted)))
-		 (pcsc-eval `(help ,name))))
+		 (pcsc-eval `(help ',name))))
 	    (else (eval expr (current-library))))))
 
   (define *verbose* (make-parameter #f))

@@ -23,7 +23,10 @@
 ;; application get status of ISD
 ;; if the command is not the most top-level then
 ;; invoke-command must be used to run commands
+(print (bytevector->hex-string (invoke-command get-status issuer)))
 (print (bytevector->hex-string (invoke-command get-status applications)))
+(print (bytevector->hex-string (invoke-command get-status loadfiles)))
+(print (bytevector->hex-string (invoke-command get-status modules)))
 
 (card-disconnect)
 (release-context)
