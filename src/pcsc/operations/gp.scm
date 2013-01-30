@@ -73,7 +73,7 @@
      (security-level :init-value 'none   :accessor sc-security-level)
      (scp         :init-value #f :accessor sc-scp)
      (card-challenge :init-value #f :accessor sc-card-challenge)
-     (iv          :init-value (make-bytevector 8) :accessor sc-iv)
+     (iv          :init-form (make-bytevector 8) :accessor sc-iv)
      ;; static keys
      (enc-key     :init-value #f :accessor sc-enc-key)
      (mac-key     :init-value #f :accessor sc-mac-key)
@@ -90,12 +90,8 @@
     (make <secure-channel-context> :key-version key-version :key-id key-id
 	  :challenge challenge :option option))
 
-  (define-syntax bv-set!
-    (syntax-rules ()
-      ((_ bv i v) (bytevector-u8-set! bv i v))))
-  (define-syntax bv-ref
-    (syntax-rules ()
-      ((_ bv i) (bytevector-u8-ref bv i))))
+  (define-syntax bv-set! (identifier-syntax bytevector-u8-set!))
+  (define-syntax bv-ref  (identifier-syntax bytevector-u8-ref))
 
   (define (initialize-update context)
     (let1 apdu (make-bytevector 13)

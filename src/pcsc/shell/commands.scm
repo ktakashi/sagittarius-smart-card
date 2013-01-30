@@ -316,10 +316,10 @@
 	    (else (error 'channel "key can not be converted to bytevector" v))))
     ;; closes current channel if there is.
     (close-channel)
-    (let ((protocol (make-bytevector 255)))
+    (let1 protocol (and (not option) (make-bytevector 255))
       (unless option
 	;; tag 66
-	(let1 data (pcsc:bytevector->apdu-string 
+	(let1 data (pcsc:bytevector->hex-string 
 		    (send-apdu #vu8(#x80 #xCA #x00 #x66 #x00)))
 	  (do ((offset 0 (+ index 18))
 	       (index (string-contains-ci data "2A864886FC6B04" 0)
@@ -351,6 +351,8 @@
 
   (define-command (close-channel)
     "close-channel\n\nCloses current secure channel"
+    (*current-sc* #f)
+    #;
     (when (*current-sc*)
       (let1 resp (send-apdu #vu8(#x00 #x70 #x80 #x00))
 	(*current-sc* #f)
