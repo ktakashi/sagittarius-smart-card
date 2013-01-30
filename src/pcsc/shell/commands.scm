@@ -31,6 +31,7 @@
 (library (pcsc shell commands)
     (export define-command
 	    lookup-command
+	    invoke-command
 	    ;; utilities
 	    aid->bytevector
 	    retrieve-return-code
@@ -55,6 +56,11 @@
   (define *help-table* (make-eq-hashtable))
 
   (define (lookup-command command) (hashtable-ref *command-table* command #f))
+
+  (define-syntax invoke-command
+    (syntax-rules ()
+      ((_ command args ...)
+       ((lookup-command 'command) args ...))))
 
   (define-syntax define-command
     (lambda (x)
@@ -125,9 +131,10 @@
   (define *current-connection* (make-parameter #f))
   (define *current-protocol* (make-parameter #f))
 
-  (define-command (card-connect reader :key (share pcsc:*scard-share-shared*)
+  (define-command (card-connect :optional (reader #f)
+				:key (share pcsc:*scard-share-shared*)
 				(protocol pcsc:*scard-protocol-any*))
-    "card-connect reader :key share protocol\n\n\
+    "card-connect [reader] :key share protocol\n\n\
      Connect to a card and returns actual protocol. \n\
      if there is already a connection, the it will be disconnected."
     (check-context card-connect)
@@ -246,8 +253,7 @@
       (call-with-bytevector-output-port
        (lambda (out)
 	 (let loop ((response (send-apdu (construct-apdu p2))))
-	   (cond ((bytevector=? #vu8(#x63 #x10)
-				(retrieve-return-code response))
+	   (cond ((gp:response-code=? response #x6310)
 		  (put-bytevector out response 
 				  0 (- (bytevector-length response) 2))
 		  (loop (send-apdu (construct-apdu (bitwise-ior #x0001 p2)))))

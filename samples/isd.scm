@@ -6,11 +6,11 @@
 (define key #x10101010101010101010101010101010)
 
 (establish-context)
-(card-connect #f)
+(card-connect)
 (trace-on)
 (select)
 ;; get card status (for nothing)
-(card-status)
+(print (invoke-command card-status))
 
 ;; open secure channel
 (channel :security *security-level-mac* 
@@ -21,7 +21,9 @@
 	 :dek-key key)
 
 ;; application get status of ISD
-(get-status applications)
+;; if the command is not the most top-level then
+;; invoke-command must be used to run commands
+(print (bytevector->hex-string (invoke-command get-status applications)))
 
 (card-disconnect)
 (release-context)

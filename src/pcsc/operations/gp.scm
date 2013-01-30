@@ -44,6 +44,9 @@
 
 	    ;; APDU encoder
 	    encode-apdu
+
+	    ;; utility
+	    response-code=?
 	    
 	    ;; constant variables
 	    *key-indicator-enc* 
@@ -63,6 +66,12 @@
 	    (sagittarius)
 	    (sagittarius control)
 	    (pcsc operations control))
+
+  (define (response-code=? apdu code)
+    (let1 status (bytevector-u16-ref apdu (- (bytevector-length apdu) 2)
+				     (endianness big))
+      (= status code)))
+
 
   (define-class <secure-channel-context> ()
     ((challenge   :init-keyword :challenge   :reader sc-challenge)
