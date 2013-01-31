@@ -51,7 +51,7 @@
 	    call-with-card-context
 	    bytevector->hex-string
 	    apdu-pretty-print *tag-dictionary*
-	    ensure-bytevector
+	    ensure-bytevector apdu-sw
 	    strip-return-code
 	    ;; for debugging
 	    *trace-on* trace-log

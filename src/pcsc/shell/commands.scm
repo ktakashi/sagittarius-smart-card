@@ -153,7 +153,7 @@
       (*current-protocol* ap)
       ap))
 
-  (define-command (card-disconnect :optional (how pcsc:*scard-leave-card*))
+  (define-command (card-disconnect :optional (how pcsc:*scard-reset-card*))
     "card-disconnect\n\n\
      Disconnect current connection."
     (when (*current-connection*)
@@ -226,15 +226,23 @@
      Sends select command."
     ;; cla and ins
     (define base-command #vu8(#x00 #xA4 #x04 #x00))
-    (send-apdu
-     (call-with-bytevector-output-port
-      (lambda (out)
-	(put-bytevector out base-command)
-	(if aid
-	    (let1 bv (aid->bytevector aid)
-	      (put-u8 out (bytevector-length bv))
-	      (put-bytevector out bv))
-	    (put-u8 out 0))))))
+    (let* ((apdu (call-with-bytevector-output-port
+		   (lambda (out)
+		     (put-bytevector out base-command)
+		     (if aid
+			 (let1 bv (aid->bytevector aid)
+			   (put-u8 out (bytevector-length bv))
+			   (put-bytevector out bv))
+			 (put-u8 out 0)))))
+	   (resp (send-apdu apdu)))
+      (let1 sw (pcsc:apdu-sw resp)
+	(case (bitwise-and sw #xFF00)
+	  ((#x6C00) 
+	   ;; resend with Lc = SW2
+	   (bytevector-u8-set! apdu (- (bytevector-length apdu) 1)
+			       (bitwise-and sw #x00FF))
+	   (send-apdu apdu))
+	  (else resp)))))
 
   (define-constant issuer       #x80)
   (define-constant applications #x40)

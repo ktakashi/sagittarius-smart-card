@@ -29,7 +29,8 @@
 ;;;  
 
 (library (pcsc operations apdu)
-    (export sw->description decompose-apdu)
+    (export sw->description decompose-apdu
+	    apdu-sw)
     (import (rnrs)
 	    (sagittarius)
 	    (sagittarius control))
@@ -79,11 +80,12 @@
       (#x9484 . "(Global Platform) Algorithm not supported")
       (#x9485 . "(Global Platform) Invalid Key Check Value")))
 
+  (define (apdu-sw apdu :optional (len #f))
+    (bytevector-u16-ref apdu (- (or len (bytevector-length apdu)) 2)
+			(endianness big)))
+
   (define (sw->description resp :optional (buffer-length #f))
-    (let1 sw (bytevector-u16-ref resp 
-				 (- (or buffer-length (bytevector-length resp))
-				    2)
-				 (endianness big))
+    (let1 sw (apdu-sw resp buffer-length)
       (cond ((assv sw *iso-7816-status-words*) => cdr)
 	    (else 
 	     (case (bitwise-and sw #xFF00)
