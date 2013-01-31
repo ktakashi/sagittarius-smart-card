@@ -387,4 +387,41 @@
 	(*current-sc* #f)
 	resp)))
 
+  (define-command (delete aid :key (cascade #f) (token #f))
+    "delete aid :key cascade token\n\n\
+     Deletes specified application.\n\
+     * cascade: if this is not #f, then this deletes all dependencies.\n\
+     * token:   delete token. (tag '9E')"
+    (define (get-data)
+      (call-with-bytevector-output-port
+       (lambda (out)
+	 (define (ensure-bv o :optional (size #f))
+	   (cond ((bytevector? o) o)
+		 ((number? o)
+		  (apply integer->bytevector o
+			 (if size (list size) '())))
+		 ((symbol? o) (->string (ensure-bv o)))
+		 ((string? o) 
+		  (ensure-bv (->integer o 16)
+			     (div (string-length o) 2)))
+		 (else (error 'delete 
+			      "can't convert to bytevector" o))))
+	 (define (emit-bv bv)
+	   (put-u8 out (bytevector-length bv))
+	   (put-bytevector out bv))
+	 (emit-bv (ensure-bv aid))
+	 (when token
+	   (put-u8 out #x9E)
+	   (emit-bv (ensure-bv token))))))
+    (let ((p2 (if cascade #vu8(#x80) #vu8(#x00)))
+	  (data   (get-data))
+	  (lc&tag (make-bytevector 2 #x4F)))
+      (bytevector-u8-set! lc&tag 0 (+ (bytevector-length data) 1))
+      (send-apdu (bytevector-append
+		  #vu8(#x80 #xE4 #x00)
+		  p2
+		  lc&tag
+		  data))))
+
+
 )
