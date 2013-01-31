@@ -22,10 +22,14 @@ Run following script with Sagittarius:
 
 Then prompt will be shown. `(help)` command will show all the defined commands.
 
+## Loading DSL script file.
+
+See `load.scm` file. And `samples` directory contains sample scripts.
+
 ## Requirements
 
-Sagittarius version 0.4.1 or later. It's better to use the latest repository's
-one.
+Sagittarius version 0.4.2 (current HEAD). If you don't use `apdu-pretty-print`
+then 0.4.1 should also work.
 
 
 ## TODO

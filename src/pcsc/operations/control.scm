@@ -50,6 +50,8 @@
 	    ;; utility
 	    call-with-card-context
 	    bytevector->hex-string
+	    apdu-pretty-print *tag-dictionary*
+	    strip-return-code
 	    ;; for debugging
 	    *trace-on*
 	    
@@ -61,8 +63,9 @@
 	    (sagittarius control)
 	    (sagittarius ffi)
 	    (sagittarius regex)
-	    (srfi :39)
-	    (pcsc raw))
+	    (srfi :39 parameters)
+	    (pcsc raw)
+	    (tlv))
 
   (define *trace-on* (make-parameter #f))
 
@@ -237,5 +240,17 @@
 		     send-data)
 	(trace-log " R: " (bytevector->hex-string recv-buffer buffer-length))
 	(values buffer-length (and need-pci recv-pci)))))
+
+  (define emv-parser (make-tlv-parser EMV))
+  (define (apdu-pretty-print bv :optional (out (current-output-port)))
+    (call-with-port
+	  (open-bytevector-input-port bv)
+	(lambda (in)
+	  (do ((tlv (emv-parser in) (emv-parser in)))
+	      ((not tlv) #t)
+	    (dump-tlv tlv out) (newline out)))))
+
+  (define (strip-return-code bv)
+    (bytevector-copy bv 0 (- (bytevector-length bv) 2)))
 
   )
