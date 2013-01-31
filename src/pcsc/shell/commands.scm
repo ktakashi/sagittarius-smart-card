@@ -1,20 +1,20 @@
 ;;; -*- mode:scheme; coding: utf-8 -*-
 ;;;
 ;;; pcsc/commands.scm - Shell commands library
-;;;  
+;;;
 ;;;   Copyright (c) 2013  Takashi Kato  <ktakashi@ymail.com>
-;;;   
+;;;
 ;;;   Redistribution and use in source and binary forms, with or without
 ;;;   modification, are permitted provided that the following conditions
 ;;;   are met:
-;;;   
+;;;
 ;;;   1. Redistributions of source code must retain the above copyright
 ;;;      notice, this list of conditions and the following disclaimer.
-;;;  
+;;;
 ;;;   2. Redistributions in binary form must reproduce the above copyright
 ;;;      notice, this list of conditions and the following disclaimer in the
 ;;;      documentation and/or other materials provided with the distribution.
-;;;  
+;;;
 ;;;   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 ;;;   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 ;;;   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -26,7 +26,7 @@
 ;;;   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 ;;;   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;;   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-;;;  
+;;;
 
 (library (pcsc shell commands)
     (export define-command
@@ -40,8 +40,15 @@
 		    (gp:*security-level-enc*  *security-level-enc*)
 		    (gp:*security-level-renc* *security-level-renc*))
 	    ;; variables
+	    ;; get-status
 	    issuer applications loadfiles modules
-	    )
+	    ;; get-data
+	    iin
+	    card-image-number
+	    card-data
+	    key-information-template
+	    extended-card-recources
+	    cplc)
     (import (rnrs)
 	    (prefix (pcsc operations control) pcsc:)
 	    (prefix (pcsc operations gp) gp:)
@@ -148,7 +155,7 @@
   (define-command (card-disconnect :optional (how pcsc:*scard-leave-card*))
     "card-disconnect\n\n\
      Disconnect current connection."
-    (when (*current-connection*) 
+    (when (*current-connection*)
       (close-channel)
       (pcsc:card-disconnect! (*current-connection*) how)
       (*current-connection* #f)
@@ -196,7 +203,7 @@
 		   pcsc:*scard-pci-t1*
 		   pcsc:*scard-pci-t0*))
 	  (apdu (if (bytevector? apdu) apdu (parse-apdu apdu))))
-      (receive (resp _) 
+      (receive (resp _)
 	  (pcsc:card-transmit (*current-connection*)
 			      pci (gp:encode-apdu (*current-sc*) apdu))
 	resp)))
@@ -254,10 +261,26 @@
        (lambda (out)
 	 (let loop ((response (send-apdu (construct-apdu p2))))
 	   (cond ((gp:response-code=? response #x6310)
-		  (put-bytevector out response 
+		  (put-bytevector out response
 				  0 (- (bytevector-length response) 2))
 		  (loop (send-apdu (construct-apdu (bitwise-ior #x0001 p2)))))
 		 (else (put-bytevector out response))))))))
+
+  ;; issuer identification number
+  (define-constant iin                      #x0042)
+  (define-constant card-image-number        #x0045)
+  (define-constant card-data                #x0066)
+  (define-constant key-information-template #x00E0)
+  (define-constant extended-card-recources  #xFF21)
+  (define-constant cplc                     #x9F7F)
+
+  (define-command (get-data record)
+    "get-data record\n\n\
+     Transmit GET DATA command.\n  \
+     * record: P1 and P2 values (exact integer)."
+    (send-apdu (bytevector-append #vu8(#x80 #xCA)
+				  (integer->bytevector record 2)
+				  #vu8(#x00))))
 
   (define-command (trace-on)
     "trace-on\n\n\
@@ -325,7 +348,7 @@
     (let1 protocol (and (not option) (make-bytevector 255))
       (unless option
 	;; tag 66
-	(let1 data (pcsc:bytevector->hex-string 
+	(let1 data (pcsc:bytevector->hex-string
 		    (send-apdu #vu8(#x80 #xCA #x00 #x66 #x00)))
 	  (do ((offset 0 (+ index 18))
 	       (index (string-contains-ci data "2A864886FC6B04" 0)
@@ -341,12 +364,12 @@
 	  (let* ((scp (bitwise-and (bytevector-u8-ref rsp 11) #xFF))
 		 (v   (bytevector-u8-ref protocol scp)))
 	    (when (positive? v) (sc-context-option-set! context v))))
-	(unless (gp:authenticate-card context rsp 
-				      (ensure-bytevector enc-key) 
-				      (ensure-bytevector mac-key) 
-				      (ensure-bytevector dek-key) 
+	(unless (gp:authenticate-card context rsp
+				      (ensure-bytevector enc-key)
+				      (ensure-bytevector mac-key)
+				      (ensure-bytevector dek-key)
 				      derive-key)
-	  (raise-channel-error 
+	  (raise-channel-error
 	   'channel
 	   "card could not be authenicated with the supplied keys!"
 	   "Authentication failed"))
