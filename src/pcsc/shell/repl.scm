@@ -33,7 +33,8 @@
 	    pcsc-repl-promptor
 	    pcsc-repl-exception-printer
 	    pcsc-repl-printer
-	    pcsc-repl-reader)
+	    pcsc-repl-reader
+	    *verbose*)
     (import (rnrs)
 	    (rnrs eval)
 	    (util file)

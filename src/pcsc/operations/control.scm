@@ -51,9 +51,10 @@
 	    call-with-card-context
 	    bytevector->hex-string
 	    apdu-pretty-print *tag-dictionary*
+	    ensure-bytevector
 	    strip-return-code
 	    ;; for debugging
-	    *trace-on*
+	    *trace-on* trace-log
 	    
 	    ;; condition
 	    &pcsc-error pcsc-error? condition-return-code
@@ -74,6 +75,7 @@
     (syntax-rules ()
       ((_ expr ...)
        (when (*trace-on*)
+	 (display ";; " (current-error-port))
 	 (for-each (lambda (exp) (display exp (current-error-port)))
 		   (list expr ...))
 	 (newline (current-error-port))))))
@@ -88,6 +90,16 @@
        (do ((i 0 (+ i 1)))
 	   ((= i len))
 	 (format out "~2,'0X" (bytevector-u8-ref bv i))))))
+
+
+  (define (ensure-bytevector v :optional (size #f))
+    (cond ((bytevector? v) v)
+	  ((number? v) (apply integer->bytevector v (or size '())))
+	  ((symbol? v) (ensure-bytevector (->string v)))
+	  ((string? v) (ensure-bytevector (->number v 16)
+					  (div (string-length v) 2)))
+	  (else (error 'ensure-bytevector
+		       "given value can not be converted to bytevector" v))))
 
   (define translate-error-code error-code->string)
 

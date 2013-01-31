@@ -107,5 +107,4 @@
 	    (bytevector-u8-ref apdu 3) ;; P2
 	    (bytevector-u8-ref apdu 4) ;; Lc
 	    (bytevector-copy apdu 5)))
-
 )

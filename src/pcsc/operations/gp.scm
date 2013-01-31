@@ -33,6 +33,7 @@
 	    ;; gp operations
 	    initialize-update
 	    authenticate-card
+	    authenticate-card/keys
 	    external-authenticate
 
 	    ;; key deriver
@@ -65,6 +66,7 @@
 	    (util bytevector)
 	    (sagittarius)
 	    (sagittarius control)
+	    (match)
 	    (pcsc operations control))
 
   (define (response-code=? apdu code)
@@ -119,6 +121,27 @@
     (derive-static-keys! context enc-key mac-key dek-key card-answer derive-key)
     (derive-session-key! context card-answer)
     (verify-card-cryptogram context card-answer))
+
+  (define (authenticate-card/keys context card-answer keys derive-key)
+    (define (authenticate key)
+      ;; use a sort of big hammer to hit a nail
+      (match key
+	((enc)
+	 (let1 key (ensure-bytevector enc)
+	   (authenticate-card context card-answer key key key derive-key)))
+	((enc mac dek)
+	 (authenticate-card context card-answer
+			    (ensure-bytevector enc) (ensure-bytevector mac)
+			    (ensure-bytevector dek) derive-key))
+	(_ (error 'authenticate-card/keys 
+		  "invalid key list was given" key keys))))
+    (let loop ((keys keys))
+      (cond ((null? keys) #f)
+	    ((authenticate (car keys))
+	     (trace-log "Cryptogram Authenticated with static ENC key "
+			(bytevector->hex-string 
+			 (ensure-bytevector (caar keys)))))
+	    (else (loop (cdr keys))))))
 
   (define (verify-card-cryptogram context card-answer)
     (let ((card-cryptogram (bytevector-copy card-answer 20 28))

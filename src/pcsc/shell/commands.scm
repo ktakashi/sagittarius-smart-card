@@ -55,6 +55,7 @@
 	    (sagittarius)
 	    (sagittarius object)
 	    (sagittarius control)
+	    (util file)
 	    (tlv)
 	    (srfi :13)
 	    (srfi :39))
@@ -319,6 +320,25 @@
 				(make-message-condition msg)
 				(make-irritants-condition irr))))))
 
+  (define *master-keys* (make-parameter #f))
+  (define-command (load-key-list file)
+    "load-key-list file\n\n\
+     Convenient command. Loads key lists from given file and 'channel' command \
+     tries to search proper key from the list.\n\
+     The file format must be like this;\n\
+     $key = bv, string, or integer\n\
+     ($key)\n\
+     ($key $key $key)\n\
+     The first form uses given key for all keys. The second form then\
+     $keys are ENC, MAC, DEK respectively."
+    (*master-keys* (file->sexp-list file)))
+
+  (define-command (set-key-list! lst)
+    "set-key-list! list\n\n\
+     Convenient command. Similar with load-key-list but this one sets the give \
+     list to search list."
+    (*master-keys* lst))
+
   (define-command (channel :key (security gp:*security-level-none*)
 			   (key-id 0) (key-version 0)
 			   (option #f)
@@ -337,12 +357,6 @@
      * key-version: key version.\n  \
      * enc-key, mac-key, dec-key: keys to authenticate. if these are not \n    \
        specified *enc-key*, *mac-key* or *dek-key* parameters will be used."
-    (define (ensure-bytevector v)
-      (cond ((bytevector? v) v)
-	    ((number? v) (integer->bytevector v))
-	    ((symbol? v) (ensure-bytevector (->string v)))
-	    ((string? v) (ensure-bytevector (->number v 16)))
-	    (else (error 'channel "key can not be converted to bytevector" v))))
     ;; closes current channel if there is.
     (close-channel)
     (let1 protocol (and (not option) (make-bytevector 255))
@@ -364,11 +378,16 @@
 	  (let* ((scp (bitwise-and (bytevector-u8-ref rsp 11) #xFF))
 		 (v   (bytevector-u8-ref protocol scp)))
 	    (when (positive? v) (sc-context-option-set! context v))))
-	(unless (gp:authenticate-card context rsp
-				      (ensure-bytevector enc-key)
-				      (ensure-bytevector mac-key)
-				      (ensure-bytevector dek-key)
-				      derive-key)
+	(unless (if (and (or (not enc-key) (not mac-key) (not dek-key))
+			 (*master-keys*))
+		    (gp:authenticate-card/keys context rsp
+					       (*master-keys*)
+					       derive-key)
+		    (gp:authenticate-card context rsp
+					  (pcsc:ensure-bytevector enc-key)
+					  (pcsc:ensure-bytevector mac-key)
+					  (pcsc:ensure-bytevector dek-key)
+					  derive-key))
 	  (raise-channel-error
 	   'channel
 	   "card could not be authenicated with the supplied keys!"
@@ -395,24 +414,13 @@
     (define (get-data)
       (call-with-bytevector-output-port
        (lambda (out)
-	 (define (ensure-bv o :optional (size #f))
-	   (cond ((bytevector? o) o)
-		 ((number? o)
-		  (apply integer->bytevector o
-			 (if size (list size) '())))
-		 ((symbol? o) (->string (ensure-bv o)))
-		 ((string? o) 
-		  (ensure-bv (->integer o 16)
-			     (div (string-length o) 2)))
-		 (else (error 'delete 
-			      "can't convert to bytevector" o))))
 	 (define (emit-bv bv)
 	   (put-u8 out (bytevector-length bv))
 	   (put-bytevector out bv))
-	 (emit-bv (ensure-bv aid))
+	 (emit-bv (pcsc:ensure-bytevector aid))
 	 (when token
 	   (put-u8 out #x9E)
-	   (emit-bv (ensure-bv token))))))
+	   (emit-bv (pcsc:ensure-bytevector token))))))
     (let ((p2 (if cascade #vu8(#x80) #vu8(#x00)))
 	  (data   (get-data))
 	  (lc&tag (make-bytevector 2 #x4F)))
