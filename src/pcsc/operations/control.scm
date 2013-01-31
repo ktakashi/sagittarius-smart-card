@@ -65,6 +65,7 @@
 	    (sagittarius regex)
 	    (srfi :39 parameters)
 	    (pcsc raw)
+	    (pcsc operations apdu)
 	    (tlv))
 
   (define *trace-on* (make-parameter #f))
@@ -238,7 +239,10 @@
       (receive (r buffer-length) (transmit&response send-data recv-pci)
 	(check-error r card-transmit! "failed to transmit given data"
 		     send-data)
-	(trace-log " R: " (bytevector->hex-string recv-buffer buffer-length))
+	(trace-log " R: "
+		   (bytevector->hex-string recv-buffer buffer-length)
+		   " -> "
+		   (sw->description recv-buffer buffer-length))
 	(values buffer-length (and need-pci recv-pci)))))
 
   (define emv-parser (make-tlv-parser EMV))
