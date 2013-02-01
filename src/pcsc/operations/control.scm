@@ -51,7 +51,7 @@
 	    call-with-card-context
 	    bytevector->hex-string
 	    apdu-pretty-print *tag-dictionary*
-	    ensure-bytevector apdu-sw
+	    ensure-bytevector
 	    strip-return-code
 	    ;; for debugging
 	    *trace-on* trace-log
@@ -231,19 +231,33 @@
 			 apdu (bytevector-length apdu)
 			 recv-pci
 			 recv-buffer (address recv-length)))
-      (let* ((r-l (integer->pointer (bytevector-length recv-buffer)))
-	     (r (transmit apdu recv-pci r-l)))
-	(if (= (bytevector-u8-ref recv-buffer 0) #x61)
-	    ;; get responce
-	    (let* ((len (bytevector-u8-ref recv-buffer 1))
-		   (cmd (bytevector-copy #vu8(#x00 #xC0 #x00 #x00 0)))
-		   (r-l (integer->pointer (bytevector-length recv-buffer))))
+      (let* ((buf-len (bytevector-length recv-buffer))
+	     (r-l (integer->pointer buf-len))
+	     (r (transmit apdu recv-pci r-l))
+	     (sw (apdu-sw recv-buffer (pointer->integer r-l))))
+	(case (bitwise-and sw #xFF00)
+	  ((#x6100) ;; get response
+	   (let* ((len (bitwise-and sw #xFF))
+		  (cmd (bytevector-copy #vu8(#x00 #xC0 #x00 #x00 0)))
+		  (r-l (integer->pointer buf-len)))
 	      ;; reset buffer
 	      (bytevector-fill! recv-buffer 0)
 	      (bytevector-u8-set! cmd 4 len)
 	      (let1 r (transmit cmd recv-pci r-l)
-		(values r (pointer->integer r-l))))
-	    (values r (pointer->integer r-l)))))
+		(values r (pointer->integer r-l)))))
+	  ((#x6C00)
+	   ;; ETSI TS 102 221, 7.3.1.1.5
+	   ;; the SW2 must be immediately re-send
+	   ;; XXX: Is this for all card or only for UICC?
+	   ;; copy it in case caller wants to re-use apdu
+	   (let ((cmd (bytevector-copy apdu))
+		 (r-l (integer->pointer buf-len)))
+	     (bytevector-u8-set! cmd (- (bytevector-length cmd) 1)
+				 (bitwise-and sw #x00FF))
+	     (let1 r (transmit cmd recv-pci r-l)
+	       (values r (pointer->integer r-l)))))
+	  (else
+	   (values r (pointer->integer r-l))))))
 
     (trace-log "Transmitting APDU")
     (trace-log " S: " (bytevector->hex-string send-data))
