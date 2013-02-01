@@ -20,11 +20,11 @@
   (apdu-pretty-print (strip-return-code (invoke-command get-status issuer)))
   (print "applications")
   (apdu-pretty-print (strip-return-code
-		      (invoke-command get-status applications)))
+		      (invoke-command get-status application)))
   (print "loadfiles")
-  (apdu-pretty-print (strip-return-code (invoke-command get-status loadfiles)))
+  (apdu-pretty-print (strip-return-code (invoke-command get-status loadfile)))
   (print "modules")
-  (apdu-pretty-print (strip-return-code (invoke-command get-status modules))))
+  (apdu-pretty-print (strip-return-code (invoke-command get-status module))))
 
 (card-disconnect)
 (release-context)

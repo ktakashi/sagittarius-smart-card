@@ -40,8 +40,11 @@
 		    (gp:*security-level-enc*  *security-level-enc*)
 		    (gp:*security-level-renc* *security-level-renc*))
 	    ;; variables
-	    ;; get-status
-	    issuer applications loadfiles modules
+	    ;; get-status and set-status
+	    issuer application loadfile module
+	    ;; 
+	    associated locked personalized secured selectable card-locked
+	    terminated
 	    ;; get-data
 	    iin
 	    card-image-number
@@ -55,6 +58,7 @@
 	    (sagittarius)
 	    (sagittarius object)
 	    (sagittarius control)
+	    (binary pack)
 	    (util file)
 	    (tlv)
 	    (srfi :13)
@@ -236,15 +240,15 @@
 		      (put-u8 out 0))))
       (send-apdu apdu)))
 
-  (define-constant issuer       #x80)
-  (define-constant applications #x40)
-  (define-constant loadfiles    #x20)
-  (define-constant modules      #x10)
+  (define-constant issuer      #x80)
+  (define-constant application #x40)
+  (define-constant loadfile    #x20)
+  (define-constant module      #x10)
 
   (define-command (get-status type :key (aid #f) (contactless #f))
     "get-status types :key aid\n\n\
      Transmit GET STATUS command.\n  \
-     * type: status type must be issuer, applications, loadfiles or modules"
+     * type: status type must be issuer, application, loadfile or module"
     (let ((p1 type)
 	  (p2 (if contactless #x00 #x02)))
       (define (construct-apdu p2)
@@ -266,6 +270,31 @@
 				  0 (- (bytevector-length response) 2))
 		  (loop (send-apdu (construct-apdu (bitwise-ior #x0001 p2)))))
 		 (else (put-bytevector out response))))))))
+
+  ;; set status specific
+  (define-constant associated   #x20)
+  ;; p2 parameters
+  (define-constant locked       #x83)
+  (define-constant personalized #x0F)
+  (define-constant secured      personalized)
+  (define-constant selectable   #x07)
+  (define-constant card-locked  #x7F)
+  (define-constant terminated   #xFF)
+  
+  (define-command (set-status type control :optional (aid #f))
+    "set-status type control [aid]\n\n\
+     Transmit SET STATUS command.\n\
+     type should be issuer, application or (application | associated).\n\
+     control should be locked, personalized or secured, selectable, \
+     card-locked or terminated.\n\
+     These parameters are merely a byte so it can be just a legal number.\n\
+     aid must be a valid AID."
+    (unless (or (= type issuer) aid)
+      (error 'set-status "AID must be supplied for non issuer type."))
+    (let1 aid (if aid (aid->bytevector aid) #vu8())
+      (send-apdu (apply pack "!S3C*C" #x80F0 type control
+			(bytevector-length aid)
+			(bytevector->u8-list aid)))))
 
   ;; issuer identification number
   (define-constant iin                      #x0042)

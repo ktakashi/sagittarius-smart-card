@@ -28,8 +28,7 @@ See `load.scm` file. And `samples` directory contains sample scripts.
 
 ## Requirements
 
-Sagittarius version 0.4.2 (current HEAD). If you don't use `apdu-pretty-print`
-then 0.4.1 should also work.
+Sagittarius version 0.4.2 (current HEAD).
 
 
 ## TODO
