@@ -29,11 +29,12 @@
 ;;;  
 
 (library (pcsc operations apdu)
-    (export sw->description decompose-apdu
+    (export sw->description decompose-apdu compose-apdu
 	    apdu-sw)
     (import (rnrs)
 	    (sagittarius)
-	    (sagittarius control))
+	    (sagittarius control)
+	    (binary pack))
   (define-constant *iso-7816-status-words*
     '((#x6200 . "No information given")
       (#x6281 . "Part of returned data may be corrupted")
@@ -97,16 +98,25 @@
 			(bitwise-and sw #x00FF)))
 	       (else (format "Unknown code [~X]" sw)))))))
 
-  ;; FIXME use (binary pack) after 0.4.2 is released
-  ;; returns 6 values, CLA INS P1 P2 Lc and data
+  ;; returns 6 values, CLA INS P1 P2 data and Le
   (define (decompose-apdu apdu)
-    ;; APDU needs CLA INS P1 P2 Lc
+    ;; APDU needs at least CLA INS P1 P2 Lc
     (when (< (bytevector-length apdu) 5)
       (assertion-violation 'decompose-apdu "invalid APDU length" apdu))
-    (values (bytevector-u8-ref apdu 0) ;; CLA
-	    (bytevector-u8-ref apdu 1) ;; INS
-	    (bytevector-u8-ref apdu 2) ;; P1
-	    (bytevector-u8-ref apdu 3) ;; P2
-	    (bytevector-u8-ref apdu 4) ;; Lc
-	    (bytevector-copy apdu 5)))
+    (let*-values (((apdu-len) (bytevector-length apdu))
+		  ((cla ins p1 p2 lc) (unpack "5C" apdu 0))
+		  ((data)             (bytevector-copy apdu 5 (+ lc 5)))
+		  ((le) (if (> apdu-len (+ lc 5))
+			    (bytevector-u8-ref apdu (- apdu-len 1))
+			    #f)))
+      (values cla ins p1 p2 data le)))
+
+  (define (compose-apdu cla ins p1 p2 data :optional (le #f))
+    (let* ((data-len (bytevector-length data))
+	   (apdu (make-bytevector (+ data-len 5 (if le 1 0)))))
+      (pack! "5C" apdu 0 cla ins p1 p2 data-len)
+      (bytevector-copy! data 0 apdu 5 data-len)
+      (when le
+	(bytevector-u8-set! apdu (- (bytevector-length apdu) 1) le))
+      apdu))
 )
