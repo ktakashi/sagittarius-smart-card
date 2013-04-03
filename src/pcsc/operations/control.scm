@@ -183,7 +183,8 @@
 	(connect reader)
 	(let loop ((readers (card-list-readers context)))
 	  (if (null? readers)
-	      (raise-pcrc-error 'card-connect "can't find any reader")
+	      (raise-pcrc-error 'card-connect "can't find any reader"
+				*scard-e-no-readers-available*)
 	      (receive (card ap) (connect (car readers) #t)
 		(if card
 		    (values card ap)
