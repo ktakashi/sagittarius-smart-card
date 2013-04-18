@@ -55,6 +55,7 @@
     (import (rnrs)
 	    (prefix (pcsc operations control) pcsc:)
 	    (prefix (pcsc operations gp) gp:)
+	    (prefix (pcsc operations apdu) apdu:)
 	    (sagittarius)
 	    (sagittarius object)
 	    (sagittarius control)
@@ -228,22 +229,19 @@
   (define-command (select :key (aid #f))
     "select :key aid\n\n\
      Sends select command."
-    ;; cla and ins
-    (define base-command #vu8(#x00 #xA4 #x04 #x00))
-    (let1 apdu (call-with-bytevector-output-port
-		(lambda (out)
-		  (put-bytevector out base-command)
-		  (if aid
-		      (let1 bv (aid->bytevector aid)
-			(put-u8 out (bytevector-length bv))
-			(put-bytevector out bv))
-		      (put-u8 out 0))))
+    (let1 apdu (apdu:compose-apdu #x00 #xA4 #x04 #x00
+				  (if aid
+				      (aid->bytevector aid)
+				      #vu8()))
       (send-apdu apdu)))
 
   (define-constant issuer      #x80)
   (define-constant application #x40)
   (define-constant loadfile    #x20)
   (define-constant module      #x10)
+
+  (define (tlv*->bytevector tlv*)
+    (bytevector-concatenate (map tlv->bytevector tlv*)))
 
   (define-command (get-status type :key (aid #f) (contactless #f))
     "get-status types :key aid\n\n\
@@ -252,16 +250,10 @@
     (let ((p1 type)
 	  (p2 (if contactless #x00 #x02)))
       (define (construct-apdu p2)
-	(call-with-bytevector-output-port
-	 (lambda (out)
-	   (put-u8 out #x80) (put-u8 out #xF2)
-	   (put-u8 out p1)   (put-u8 out p2)
-	   (if aid
-	       (let1 bv (aid->bytevector aid)
-		 (put-u8 out (+ (bytevector-length bv) 1))
-		 (put-u8 out #x4F)
-		 (put-bytevector bv))
-	       (begin (put-u8 out 2) (put-u8 out #x4F) (put-u8 out #x00))))))
+	(apdu:compose-apdu 
+	 #x80 #xF2 p1 p2 
+	 (tlv*->bytevector
+	  (->tlv `((#x4F . ,(if aid (aid->bytevector aid) '())))))))
       (call-with-bytevector-output-port
        (lambda (out)
 	 (let loop ((response (send-apdu (construct-apdu p2))))
@@ -292,9 +284,7 @@
     (unless (or (= type issuer) aid)
       (error 'set-status "AID must be supplied for non issuer type."))
     (let1 aid (if aid (aid->bytevector aid) #vu8())
-      (send-apdu (apply pack "!S3C*C" #x80F0 type control
-			(bytevector-length aid)
-			(bytevector->u8-list aid)))))
+      (send-apdu (apdu:compose-apdu #x80 #xF0 type control aid))))
 
   ;; issuer identification number
   (define-constant iin                      #x0042)
@@ -304,13 +294,13 @@
   (define-constant extended-card-recources  #xFF21)
   (define-constant cplc                     #x9F7F)
 
-  (define-command (get-data record)
+  (define-command (get-data record :optional (data #vu8(00)))
     "get-data record\n\n\
      Transmit GET DATA command.\n  \
      * record: P1 and P2 values (exact integer)."
-    (send-apdu (bytevector-append #vu8(#x80 #xCA)
-				  (integer->bytevector record 2)
-				  #vu8(#x00))))
+    (let ((p1 (bitwise-and (bitwise-arithmetic-shift-right record 8) #xFF))
+	  (p2 (bitwise-and record #xFF)))
+      (send-apdu (apdu:compose-apdu #x80 #xCA p1 p2 data))))
 
   (define-command (trace-on)
     "trace-on\n\n\
@@ -440,25 +430,15 @@
      Deletes specified application.\n\
      * cascade: if this is not #f, then this deletes all dependencies.\n\
      * token:   delete token. (tag '9E')"
-    (define (get-data)
-      (call-with-bytevector-output-port
-       (lambda (out)
-	 (define (emit-bv bv)
-	   (put-u8 out (bytevector-length bv))
-	   (put-bytevector out bv))
-	 (emit-bv (pcsc:ensure-bytevector aid))
-	 (when token
-	   (put-u8 out #x9E)
-	   (emit-bv (pcsc:ensure-bytevector token))))))
-    (let ((p2 (if cascade #vu8(#x80) #vu8(#x00)))
-	  (data   (get-data))
+    (let ((p2 (if cascade #x80 #x00))
 	  (lc&tag (make-bytevector 2 #x4F)))
-      (bytevector-u8-set! lc&tag 0 (+ (bytevector-length data) 1))
-      (send-apdu (bytevector-append
-		  #vu8(#x80 #xE4 #x00)
-		  p2
-		  lc&tag
-		  data))))
+      (send-apdu (apdu:compose-apdu 
+		  #x80 #xE4 #x00 p2
+		  (tlv*->bytevector
+		   (->tlv `((#x4F . ,(aid->bytevector aid))
+			    . ,(if token
+				   `((#9F . ,(pcsc:ensure-bytevector token)))
+				   '()))))))))
 
-
+  ;;(define-command (put-key ))
 )
