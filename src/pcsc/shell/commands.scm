@@ -59,9 +59,11 @@
 	    (sagittarius)
 	    (sagittarius object)
 	    (sagittarius control)
+	    (match)
 	    (binary pack)
 	    (util file)
 	    (tlv)
+	    (only (crypto) MODE_ECB)
 	    (srfi :13)
 	    (srfi :39))
 
@@ -440,5 +442,46 @@
 				   `((#9F . ,(pcsc:ensure-bytevector token)))
 				   '()))))))))
 
-  ;;(define-command (put-key ))
+  (define-command (put-key key-version key-identifier keys
+			   :key (encrypt #t) (mode MODE_ECB))
+    "put-key key-version key-identifier keys :key (encrypt #t)\n\n\
+     Puts given keys. Keys must a list of following form.\n\
+     eg) keys = '((#x80 <key-value> <kcv>))\n    \
+         key-value and kcv can be either bytevector or integer.\n\
+     * encrypt: if this is #f, then the command doesn't encrypt the keys.\n\
+     * mode   : chaining mode."
+    (when (null? keys)
+      (assertion-violation 'put-key "at least one key is required"))
+    ;; for now don't support multiple put key commands, means no RSA keys
+    (let ((p1 (bitwise-and key-version #x7F))
+	  (p2 (bitwise-ior (if (null? (cdr keys)) 0 1) key-identifier)))
+      (define (compose-key-data keys)
+	(define (key->bytevector key)
+	  (define (maybe-encrypt data)
+	    (if (and encrypt (*current-sc*))
+		(gp:encrypt-data data (~ (*current-sc*) 'dek-session-key) mode)
+		data))
+	  ;; we don't support 'FF' extended key type
+	  (match key
+	    ((type key kcv)
+	     (let* ((key (maybe-encrypt (pcsc:ensure-bytevector key)))
+		    (kcv (pcsc:ensure-bytevector kcv))
+		    (key-len (bytevector-length key))
+		    (kcv-len (bytevector-length kcv))
+		    ;; FIXME
+		    (bv (make-bytevector (+ key-len kcv-len 3))))
+	       ;; TODO encode key length to ber-length
+	       ;; for now assume it's less than #x80
+	       (bytevector-u8-set! bv 0 type)
+	       (bytevector-u8-set! bv 1 key-len)
+	       (bytevector-copy! key 0 bv 2 key-len)
+	       (bytevector-u8-set! bv (+ 2 key-len) kcv-len)
+	       (bytevector-copy! kcv 0 bv (+ 3 key-len) kcv-len)
+	       bv))
+	    (_
+	     (error 'put-key "invalid format key"))))
+	(apply bytevector-append (make-bytevector 1 key-version)
+	       (map key->bytevector keys)))
+      (let1 key-data (compose-key-data keys)
+	(send-apdu (apdu:compose-apdu #x80 #xD8 p1 p2 key-data)))))
 )
