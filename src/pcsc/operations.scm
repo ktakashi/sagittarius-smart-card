@@ -32,4 +32,5 @@
 (library (pcsc operations)
     (export :all)
     (import (pcsc operations control)
-	    (pcsc operations gp)))
+	    (pcsc operations gp)
+	    (pcsc operations apdu)))
