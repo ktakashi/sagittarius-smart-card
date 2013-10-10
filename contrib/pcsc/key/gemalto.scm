@@ -34,7 +34,7 @@
 	    (pcsc operations gp)
 	    (sagittarius control)
 	    (crypto))
-
+  (define bv-set! bytevector-u8-set!)
   (define (derive-key-gemalto master card-answer indicator)
     (let1 derivation-data (make-bytevector 16)
       (bytevector-copy! card-answer 4 derivation-data 0 6)
