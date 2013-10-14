@@ -29,7 +29,8 @@
 ;;;  
 
 (library (pcsc key gemalto)
-    (export derive-key-gemalto)
+    (export derive-key-gemalto
+	    inject-key-derivation-data)
     (import (rnrs)
 	    (pcsc operations gp)
 	    (sagittarius control)
@@ -46,4 +47,15 @@
       (bv-set! derivation-data 15 indicator)
       (derive-key derivation-data master MODE_ECB))
     )
+
+  ;; most probably SEID for keyderivation data
+  (define (inject-key-derivation-data seid)
+    (unless (and (bytevector? seid) (= (bytevector-length seid) 8))
+      (error 'inject-key-derivation-data "key derivation data must be 8 byte"
+	     seid))
+    (lambda (master card-answer indicator)
+      (let ((copy (bytevector-copy card-answer)))
+	(bytevector-copy! seid 0 copy 2 8)
+	(derive-key-gemalto master copy indicator))))
+
 )
