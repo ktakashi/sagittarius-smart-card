@@ -124,7 +124,7 @@
 	      ((not index))
 	    (let ((scp (->integer (substring data (+ index 14) (index 16)) 16))
 		  (v   (->integer (substring data (+ index 16) (index 18)) 16)))
-	      (bytevector-u8-set! protocol scp i)))))
+	      (bytevector-u8-set! protocol scp index)))))
       (let* ((context (make-secure-channel-context key-version key-id
 						   :option option))
 	     (rsp (send-apdu conn (initialize-update context))))
@@ -140,7 +140,7 @@
 					       context security-level))
 		   (values context result)))
 		(raise
-		 (raise-channel-error 'channel
+		 (channel-error 'channel
 		  "card could not be authenicated with the supplied keys!"
 		  "Authentication failed"))
 		(else (values #f #f)))))))
@@ -211,7 +211,7 @@
 				   sc-context)))
 		 (else (put-bytevector out response))))))))
 
-  (define (set-statuc conn type control :key (aid #vu8()) (sc-context #f))
+  (define (set-status conn type control :key (aid #vu8()) (sc-context #f))
     (send-apdu conn (compose-apdu #x80 #xF0 type control aid)
 	       sc-context))
 

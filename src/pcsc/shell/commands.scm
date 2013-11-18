@@ -341,7 +341,7 @@
 				  "Could not authenticate with given keys")
 	      (let*-values (((enc-key mac-key dek-key)
 			     (match (car keys)
-			       ((enc) (value enc enc enc))
+			       ((enc) (values enc enc enc))
 			       ((enc mac dek) (values enc mac dek))
 			       (_ (error 'channel "invalid key list was given"
 					 (car keys) (*master-keys*)))))

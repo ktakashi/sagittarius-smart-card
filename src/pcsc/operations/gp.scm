@@ -291,11 +291,11 @@
 			 (put-u8 out 0)
 			 (begin (put-u8 out len)
 				;; clear command data
-				(put-bytevctor out apdu 5 len))))
+				(put-bytevector out apdu 5 len))))
 		    ((2) 
 		     ;; clear command data
 		     (when (> (bytevector-length apdu) 4)
-		       (put-bytevctor out apdu 5 len))))))))
+		       (put-bytevector out apdu 5 len))))))))
     (or (and (not context) apdu)
 	(is-select? apdu)
 	(and (= security *security-level-none*) apdu)
