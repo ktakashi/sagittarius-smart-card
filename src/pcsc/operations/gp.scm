@@ -122,6 +122,7 @@
     (derive-session-key! context card-answer)
     (verify-card-cryptogram context card-answer))
 
+  ;; deprecated
   (define (authenticate-card/keys context card-answer keys derive-key)
     (define (authenticate key)
       ;; use a sort of big hammer to hit a nail

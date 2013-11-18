@@ -33,4 +33,5 @@
     (export :all)
     (import (pcsc operations control)
 	    (pcsc operations gp)
-	    (pcsc operations apdu)))
+	    (pcsc operations apdu)
+	    (pcsc operations program)))

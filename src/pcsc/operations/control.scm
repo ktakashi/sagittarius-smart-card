@@ -61,13 +61,19 @@
 	    )
     (import (rnrs)
 	    (sagittarius)
+	    (sagittarius object)
 	    (sagittarius control)
 	    (sagittarius ffi)
 	    (sagittarius regex)
 	    (srfi :39 parameters)
 	    (pcsc raw)
 	    (pcsc operations apdu)
+	    (clos user)
 	    (tlv))
+
+  (define-class <pcsc-card-connection> ()
+    ((connection :init-keyword :connection :init-value #f)
+     (protocol   :init-keyword :protocol )))
 
   (define *trace-on* (make-parameter #f))
 
@@ -121,15 +127,24 @@
        (unless (= *scard-s-success* rv)
 	 (raise-pcrc-error 'who msg rv irr ...)))))
 
+
+  ;; managed in this library. TODO make this thread safe!
+  ;; or should this be a parameter?
+  (define *context* #f)
+
   (define (card-establish-context scope)
-    (let* ((hSC (empty-pointer))
-	   (r (s-card-establish-context scope NULL NULL (address hSC))))
-      (check-error r card-establish-context "failed to establish card context")
-      hSC))
+    (or *context*
+	(let* ((hSC (empty-pointer))
+	       (r (s-card-establish-context scope NULL NULL (address hSC))))
+	  (check-error r card-establish-context 
+		       "failed to establish card context")
+	  (set! *context* hSC)
+	  hSC)))
 
   (define (card-release-context! context)
     (let1 r (s-card-release-context context)
       (check-error r card-release-context! "failed to release card context")
+      (set! *context* #f)
       #t))
 
   (define (call-with-card-context proc :key (scope *scard-scope-user*))
@@ -178,7 +193,9 @@
 	      (check-error r card-connect "failed to connect a card")
 	      (let1 ap (pointer->integer ap)
 		(trace-log "Card connection protocol: " ap)
-		(values card ap))))))
+		(values (make <pcsc-card-connection> 
+			  :connection card :protocol ap)
+			ap))))))
     (if reader
 	(connect reader)
 	(let loop ((readers (card-list-readers context)))
@@ -191,7 +208,7 @@
 		    (loop (cdr readers))))))))
 
   (define (card-disconnect! card disposition)
-    (let1 r (s-card-disconnect card disposition)
+    (let1 r (s-card-disconnect (~ card 'connection) disposition)
       (check-error r card-disconnect! "failed to disconnect the card")
       #t))
 
@@ -213,19 +230,22 @@
 	(values readers (pointer->integer state)
 		(pointer->integer protocol) bv))))
 
-  (define (card-transmit card protocol send-data
-			 :optional (need-pci #f))
+  (define (card-transmit conn send-data :optional (need-pci #f))
     ;; I don't know why it sometimes requires more than 256 bytes
     ;; but in some case we needed more. might be data 256 bytes + return
     ;; code 2 bytes?
     (let1 buffer (make-bytevector (+ 256 2))
-      (receive (rl pci) (card-transmit! card protocol send-data buffer need-pci)
+      (receive (rl pci) (card-transmit! conn send-data buffer need-pci)
 	(if (= rl (bytevector-length buffer))
 	    (values buffer pci)
 	    (values (bytevector-copy buffer 0 rl) pci)))))
 
-  (define (card-transmit! card protocol send-data recv-buffer
+  (define (card-transmit! conn send-data recv-buffer
 			  :optional (need-pci #f))
+    (define protocol (if (= (~ conn 'protocol) *scard-protocol-t1*)
+			 *scard-pci-t1*
+			 *scard-pci-t0*))
+    (define card (~ conn 'connection))
     (define (transmit&response apdu recv-pci)
       (define (transmit apdu recv-pci recv-length)
 	(s-card-transmit card protocol
@@ -274,12 +294,11 @@
 
   (define emv-parser (make-tlv-parser EMV))
   (define (apdu-pretty-print bv :optional (out (current-output-port)))
-    (call-with-port
-	  (open-bytevector-input-port bv)
-	(lambda (in)
-	  (do ((tlv (emv-parser in) (emv-parser in)))
-	      ((not tlv) #t)
-	    (dump-tlv tlv out) (newline out)))))
+    (call-with-port (open-bytevector-input-port bv)
+      (lambda (in)
+	(do ((tlv (emv-parser in) (emv-parser in)))
+	    ((not tlv) #t)
+	  (dump-tlv tlv out) (newline out)))))
 
   (define (strip-return-code bv)
     (bytevector-copy bv 0 (- (bytevector-length bv) 2)))
