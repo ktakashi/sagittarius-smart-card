@@ -28,7 +28,7 @@ See `load.scm` file. And `samples` directory contains sample scripts.
 
 ## Requirements
 
-Sagittarius version 0.4.2 (current HEAD).
+Sagittarius version 0.4.2 or later.
 
 
 ## TODO
