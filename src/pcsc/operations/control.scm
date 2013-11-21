@@ -100,7 +100,8 @@
 
   (define (ensure-bytevector v :optional (size #f))
     (cond ((bytevector? v) v)
-	  ((number? v) (apply integer->bytevector v (or size '())))
+	  ((number? v) (apply integer->bytevector v 
+			      (or (and size (list size)) '())))
 	  ((symbol? v) (ensure-bytevector (->string v)))
 	  ((string? v) (ensure-bytevector (->number v 16)
 					  (div (string-length v) 2)))
