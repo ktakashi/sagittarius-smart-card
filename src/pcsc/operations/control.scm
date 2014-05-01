@@ -167,7 +167,7 @@
       (cond ((memv r no-result-codes) '())
 	    (else
 	     (check-error r card-readers "failed to read card reader list")
-	     (let1 readers (split-null-sep-string buffer (pointer->integer cch))
+	     (let1 readers (split-null-sep-string buffer (pointer->long cch))
 	       (s-card-free-memory context buffer)
 	       readers)))))
 
@@ -177,7 +177,7 @@
 	   (r (s-card-list-reader-groups context 
 					 (address buffer) (address cch))))
       (check-error r card-reader-groups "failed to read card reader group list")
-      (let1 groups (split-null-sep-string buffer (pointer->integer cch))
+      (let1 groups (split-null-sep-string buffer (pointer->long cch))
 	(s-card-free-memory context buffer)
 	groups)))
 
@@ -226,8 +226,8 @@
 			     (address protocol)
 			     (address atr) (address cb))))
       (check-error r card-status "failed to get status")
-      (let ((bv (pointer->bytevector atr (pointer->integer cb)))
-	    (readers (split-null-sep-string reader (pointer->integer cch))))
+      (let ((bv (pointer->bytevector atr (pointer->long cb)))
+	    (readers (split-null-sep-string reader (pointer->long cch))))
 	(values readers (pointer->integer state)
 		(pointer->integer protocol) bv))))
 
