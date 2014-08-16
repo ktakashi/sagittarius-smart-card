@@ -43,7 +43,9 @@
 	    ;; wrapper procedures
 	    card-establish-context card-release-context!
 	    card-list-readers card-list-reader-groups
-	    card-connect card-disconnect! card-reconnect
+	    card-connect card-disconnect!
+	    ;; not supported
+	    ;; card-reconnect
 	    card-status
 	    card-transmit
 	    card-transmit!

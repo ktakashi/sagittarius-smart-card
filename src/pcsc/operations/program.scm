@@ -57,8 +57,8 @@
 	    (pcsc operations apdu)
 	    (pcsc operations control))
 
-  (define-condition-type &chennel &pcsc-error
-    make-channel-error chennel-error?)
+  (define-condition-type &channel &pcsc-error
+    make-channel-error channel-error?)
 
   (define (channel-error who msg retcode . irr)
     (raise (apply condition
