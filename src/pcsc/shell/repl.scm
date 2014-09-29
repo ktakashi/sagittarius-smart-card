@@ -35,7 +35,7 @@
 	    pcsc-repl-printer
 	    pcsc-repl-reader
 	    *verbose*)
-    (import (rnrs)
+    (import (except (rnrs) exit)
 	    (rnrs eval)
 	    (util file)
 	    (sagittarius)
